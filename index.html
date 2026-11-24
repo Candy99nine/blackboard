@@ -407,6 +407,32 @@
   }
   .paper textarea:focus{ border-color:rgba(61,58,51,.6); }
 
+  /* 按学号生成：虚线框像草稿纸上的补充便签 */
+  .rollno-box{
+    margin-top:14px; padding:13px 15px 14px;
+    border:1.5px dashed rgba(61,58,51,.34); border-radius:10px;
+    background:rgba(255,213,79,.055);
+  }
+  .rollno-title{
+    font-size:15px; letter-spacing:.05em; color:#5a544a;
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  .rollno-tag{
+    font-size:11px; letter-spacing:.04em; color:#9a5a3c;
+    border:1px solid rgba(154,90,60,.45); border-radius:20px; padding:2px 9px;
+    background:rgba(255,255,255,.5);
+  }
+  .rollno-row{ display:flex; align-items:center; gap:8px; margin-top:11px; flex-wrap:wrap; font-size:15px; }
+  .rollno-row #inpRollCount{
+    width:66px; flex:none; text-align:center;
+    font-family:var(--ft-ui); font-size:19px; color:var(--ink-red);
+    background:rgba(255,255,255,.6); border:2px solid rgba(61,58,51,.4);
+    border-radius:6px; padding:5px 2px; outline:none; -webkit-user-select:text; user-select:text;
+  }
+  .rollno-row #inpRollCount:focus{ border-color:var(--ink-red); }
+  .rollno-row .ink-btn{ padding:8px 16px; min-height:40px; font-size:14px; }
+  .rollno-tip{ margin-top:10px; font-size:12px; color:#8b8478; line-height:1.85; }
+
   .chk-row{
     display:flex; align-items:center; gap:10px; margin-top:14px; cursor:pointer;
     font-size:15px; letter-spacing:.04em;
@@ -583,6 +609,18 @@
     <div id="panel-settings">
       <div class="field-label"><span>班级名称</span></div>
       <input type="text" id="inpClass" maxlength="14" placeholder="例如：三年二班">
+
+      <div class="rollno-box">
+        <div class="rollno-title">没有名单？按学号生成<span class="rollno-tag">公共电脑 / 冰点保护适用</span></div>
+        <div class="rollno-row">
+          <span>班里有</span>
+          <input type="text" id="inpRollCount" inputmode="numeric" maxlength="3" value="40" aria-label="班级人数">
+          <span>人</span>
+          <button class="ink-btn" id="btnMakeRollNo" type="button">生成 1~N 号</button>
+        </div>
+        <p class="rollno-tip">电脑重启、数据被清空后也不怕：填人数点一下，1号到N号马上排好，照常点名打卡。下面是原来的手动名单，两种都能用。</p>
+      </div>
+
       <div class="field-label"><span>同学名单</span><em id="countHint"></em></div>
       <textarea id="inpNames" spellcheck="false" placeholder="每行一位同学&#10;也可以用逗号、顿号或空格分隔"></textarea>
 
@@ -608,6 +646,7 @@
       </label>
 
       <div class="note">
+        <p>名单两种用法：上面填人数一键生成 1~N 号（电脑重启、数据清空后照样能用）；也可以在下面框里手输自己的名单，两种都行，随时切换。</p>
         <p>记举手：点一下名字 = 举手 +1，颜色越暖说明回答越多，点错了按「撤销」</p>
         <p>查作业：点一下名字 = 已交并擦掉，板上还留着的就是没交的</p>
         <p>抽人点名：左上角按钮，走马灯 2 秒落定一个名字</p>
@@ -654,7 +693,9 @@
   const rand = (a, b) => a + Math.random() * (b - a);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  const DEFAULT_NAMES = ["陈志远","林晓雨","王思琪","李昊然","张一诺","刘子轩","黄雨桐","周子墨","吴欣怡","赵梓涵","孙浩宇","胡诗涵","朱峻熙","郭芷若","何俊杰","高梦瑶","罗一鸣","郑凯文","梁静怡","宋子豪","谢雨欣","唐嘉懿","韩沐辰","冯雅琪","董子睿","萧楚楚","曹卓远","袁梦洁","邓紫涵","许文博","彭嘉禾","苏若曦","魏子涵","卢嘉树","蒋依依","蔡明轩","余思颖","杜若飞","任晓萱","姚博文"];
+  // 默认用学号：公共电脑/冰点保护重启会清掉本地数据，学号名单重建零成本
+  const makeRollNo = n => Array.from({ length: n }, (_, i) => String(i + 1) + '号');
+  const DEFAULT_NAMES = makeRollNo(40);
   const KEY = 'chalk-board-v2';
 
   /* ---------- 状态 ---------- */
@@ -665,7 +706,7 @@
   let history = [];         // 随机点名记录（保留）
   let pool = [];            // 不重复模式剩余
   let undoStack = [];
-  let settings = { className: '三年二班', noRepeat: false, sound: true, voice: true, bg: true, shape: 'note', timerSec: 300 };
+  let settings = { className: '三年二班', noRepeat: false, sound: true, voice: true, bg: true, shape: 'note', timerSec: 300, rollCount: 40 };
   let mode = 'raise';       // raise | done
   let rolling = false;
   let cells = Object.create(null);
@@ -679,6 +720,7 @@
         pickSvg = $('#pickSvg'), pickPath = $('#pickPath'),
         mask = $('#modalMask'), srAnnounce = $('#srAnnounce'),
         inpClass = $('#inpClass'), inpNames = $('#inpNames'), countHint = $('#countHint'),
+        inpRollCount = $('#inpRollCount'), btnMakeRollNo = $('#btnMakeRollNo'),
         chkNoRepeat = $('#chkNoRepeat'), chkSound = $('#chkSound'),
         chkVoice = $('#chkVoice'), chkBg = $('#chkBg'),
         btnVoice = $('#btnVoice'), voiceLabel = $('#voiceLabel'), lessonBg = $('#lessonBg'),
@@ -710,6 +752,7 @@
       doneMap = (d.doneMap && typeof d.doneMap === 'object') ? d.doneMap : {};
       history = Array.isArray(d.history) ? d.history : [];
       settings = Object.assign(settings, d.settings || {});
+      if (!Number.isInteger(settings.rollCount) || settings.rollCount < 1) settings.rollCount = 40;
       if (Array.isArray(d.pool) && d.pool.length) pool = d.pool;
       if (d.mode === 'raise' || d.mode === 'done') mode = d.mode;
       /* 隔天：今日举手、今日打卡清零；累计、名单、抽选记录全留 */
@@ -1317,6 +1360,7 @@
   }
   function fillForm() {
     inpClass.value = settings.className;
+    inpRollCount.value = settings.rollCount;
     inpNames.value = students.join('\n');
     countHint.textContent = '当前 ' + students.length + ' 人';
     chkNoRepeat.checked = !!settings.noRepeat;
@@ -1429,6 +1473,22 @@
     countHint.textContent = '当前 ' + students.length + ' 人';
   }
 
+  /* 按人数生成学号名单：1号~N号。原来的手动名单功能完全不受影响 */
+  function makeRollNoFromInput() {
+    const raw = String(inpRollCount.value).replace(/[^\d]/g, '');
+    const n = parseInt(raw, 10);
+    if (!Number.isInteger(n) || n < 1 || n > 100) {
+      toast('人数请填 1~100 之间的数字');
+      inpRollCount.focus();
+      return;
+    }
+    settings.rollCount = n;
+    inpRollCount.value = n;
+    applyStudents(makeRollNo(n));
+    inpNames.value = students.join('\n');
+    toast('已生成 1~' + n + ' 号，共 ' + n + ' 位');
+  }
+
   /* ---------- 事件 ---------- */
   btnRoll.addEventListener('click', doRoll);
   btnRaise.addEventListener('click', () => {
@@ -1465,6 +1525,10 @@
     h1Class.textContent = settings.className || '点名板';
     saveAll(); updateInfo();
   });
+  btnMakeRollNo.addEventListener('click', makeRollNoFromInput);
+  inpRollCount.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); makeRollNoFromInput(); } });
+  inpRollCount.addEventListener('input', () => { inpRollCount.value = inpRollCount.value.replace(/[^\d]/g, ''); });
+
   inpNames.addEventListener('input', () => {
     countHint.textContent = '输入中 ' + parseNames(inpNames.value).length + ' 人';
   });
